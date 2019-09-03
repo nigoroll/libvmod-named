@@ -366,12 +366,13 @@ dynamic_add(VRT_CTX, struct dynamic_domain *dom, const struct res_info *info)
 
 	switch (dom->obj->share) {
 	case DIRECTOR:
-		vrt.hosthdr = dom->obj->hosthdr;
+		vrt.authority = vrt.hosthdr = dom->obj->hosthdr;
 		VSB_printf(vsb, "%s(%s:%s)", dom->obj->vcl_name, b->ip_addr,
 		    vrt.port);
 		break;
 	case HOST:
-		vrt.hosthdr = dom->obj->hosthdr ? dom->obj->hosthdr : dom->addr;
+		vrt.authority = vrt.hosthdr =
+		    dom->obj->hosthdr ? dom->obj->hosthdr : dom->addr;
 		VSB_printf(vsb, "%s.%s(%s:%s)", dom->obj->vcl_name, dom->addr,
 		    b->ip_addr, vrt.port);
 		break;
@@ -821,7 +822,14 @@ static inline enum dynamic_share_e
 dynamic_share_parse(const char *share_s)
 {
 	switch (share_s[0]) {
-	case 'D':	return DIRECTOR; break;
+	case 'D':
+		switch (share_s[1]) {
+		case 'E':
+			return DEFAULT; break;
+		case 'I':
+			return DIRECTOR; break;
+		default:	INCOMPL();
+		}
 	case 'H':	return HOST; break;
 	default:	INCOMPL();
 	}
@@ -954,6 +962,9 @@ vmod_director__init(VRT_CTX,
 	}
 
 	obj->via = via;
+	if (obj->share == DEFAULT)
+		obj->share = via ? HOST : DIRECTOR;
+
 
 	Lck_New(&obj->mtx, lck_dir);
 
